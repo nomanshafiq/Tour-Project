@@ -4,25 +4,16 @@ on:
   push:
     branches:
       - main
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
+      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # Step 3: Build Docker image locally
-      - name: Build Docker image
-        run: docker build -t tour-project .
-
-      # Step 4: Deploy to remote server via SSH
+      # Step 2: Deploy to VM via SSH
       - name: Deploy to VM
         uses: appleboy/ssh-action@v0.1.9
         with:
@@ -31,11 +22,12 @@ jobs:
           key: ${{ secrets.VM_TUOR_KEY }}
           port: 22
           script: |
+            echo "Navigating to project directory..."
+            cd /home/ubuntu/Tour-Project
             echo "Stopping old container if exists..."
             docker stop tour-test || true
             docker rm tour-test || true
-            echo "Pulling latest image..."
-            # Copy local image to server
-            docker save tour-project | bzip2 | ssh -i ${{ secrets.VM_TUOR_KEY }} ${{ secrets.VM_USERNAME }}@${{ secrets.VM_IP }} 'bunzip2 | docker load'
+            echo "Building Docker image on the VM..."
+            docker build -t tour-project .
             echo "Running new container..."
             docker run -d -p 8080:80 --name tour-test tour-project
