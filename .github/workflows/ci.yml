@@ -1,31 +1,41 @@
-name: CI
+name: CI & Deploy
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Step 2: Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
+      # Step 3: Build Docker image locally
       - name: Build Docker image
         run: docker build -t tour-project .
 
-      - name: Run Docker container
-        run: docker run -d -p 8080:80 --name tour-test tour-project
-
-      - name: Clean up container
-        run: |
-          docker stop tour-test
-          docker rm tour-test
+      # Step 4: Deploy to remote server via SSH
+      - name: Deploy to VM
+        uses: appleboy/ssh-action@v0.1.9
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_TUOR_KEY }}
+          port: 22
+          script: |
+            echo "Stopping old container if exists..."
+            docker stop tour-test || true
+            docker rm tour-test || true
+            echo "Pulling latest image..."
+            # Copy local image to server
+            docker save tour-project | bzip2 | ssh -i ${{ secrets.VM_TUOR_KEY }} ${{ secrets.VM_USERNAME }}@${{ secrets.VM_IP }} 'bunzip2 | docker load'
+            echo "Running new container..."
+            docker run -d -p 8080:80 --name tour-test tour-project
